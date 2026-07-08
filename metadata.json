@@ -1,0 +1,6 @@
+{
+  "name": "BookMyDoctor",
+  "description": "A complete, modern, production-quality healthcare appointment booking platform connecting patients, doctors, and administrators.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
