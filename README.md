@@ -1,4 +1,5 @@
 # BookMyDoctor
+<<<<<<< HEAD
 
 BookMyDoctor is a full-stack doctor appointment booking platform that allows patients to search for doctors, book appointments, and manage their healthcare online.
 
@@ -86,3 +87,6 @@ server.ts
 **G Manil Kumar**
 
 GitHub: https://github.com/Gmanilkumaruiux
+=======
+The Book a Doctor App is an innovative healthcare booking platform designed to streamline the process of connecting patients with healthcare providers. This system enables users to easily find, schedule, and manage medical appointments, all within a user-friendly interface.
+>>>>>>> 06911ea929abbfe0694e69f42c4b2cb89749bd4e
