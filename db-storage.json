@@ -3,10 +3,29 @@
   "predictions": [],
   "reminders": [],
   "reminderLogs": [],
-  "users": [],
+  "users": [
+    {
+      "name": "Manil Galla",
+      "email": "manilgalla039@gmail.com",
+      "role": "patient",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200",
+      "id": "users_1783507215100_vqc7",
+      "createdAt": "2026-07-08T10:40:15.100Z"
+    }
+  ],
   "doctors": [],
   "appointments": [],
   "medicalRecords": [],
-  "notifications": [],
+  "notifications": [
+    {
+      "userId": "users_1783507215100_vqc7",
+      "message": "Welcome Manil Galla! Your account has been registered successfully via Google.",
+      "date": "2026-07-08T10:40:15.102Z",
+      "read": false,
+      "type": "success",
+      "id": "notifications_1783507215102_ov3f",
+      "createdAt": "2026-07-08T10:40:15.102Z"
+    }
+  ],
   "doctorApplications": []
 }

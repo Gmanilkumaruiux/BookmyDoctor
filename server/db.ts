@@ -1,185 +1,71 @@
-import fs from 'fs';
-import path from 'path';
+import mongoose, { Schema } from 'mongoose';
 
-const DB_FILE = path.join(process.cwd(), 'db-storage.json');
+// Connection URI
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/bookmydoctor';
 
-// Full database schema
-export interface DbSchema {
-  recommendations: any[];
-  predictions: any[];
-  reminders: any[];
-  reminderLogs: any[];
-  users: any[];
-  doctors: any[];
-  appointments: any[];
-  medicalRecords: any[];
-  notifications: any[];
-  doctorApplications: any[];
+// Connect to MongoDB
+mongoose.connect(MONGODB_URI)
+  .then(() => console.log('Successfully connected to MongoDB.'))
+  .catch(err => console.error('MongoDB connection error:', err));
+
+// Export dummy functions for backward compatibility
+export function readDb(): any {
+  return {};
 }
+export function writeDb(data: any): void {}
 
-// Initialize the JSON file if it does not exist
-function initDbFile() {
-  if (!fs.existsSync(DB_FILE)) {
-    const initialState: DbSchema = {
-      recommendations: [],
-      predictions: [],
-      reminders: [],
-      reminderLogs: [],
-      users: [],
-      doctors: [],
-      appointments: [],
-      medicalRecords: [],
-      notifications: [],
-      doctorApplications: []
-    };
-    fs.writeFileSync(DB_FILE, JSON.stringify(initialState, null, 2), 'utf8');
-  }
-}
-
-initDbFile();
-
-// Helper to read the database state
-export function readDb(): DbSchema {
-  try {
-    if (!fs.existsSync(DB_FILE)) {
-      initDbFile();
-    }
-    const content = fs.readFileSync(DB_FILE, 'utf8');
-    return JSON.parse(content);
-  } catch (err) {
-    console.error("Error reading JSON database file:", err);
-    return {
-      recommendations: [],
-      predictions: [],
-      reminders: [],
-      reminderLogs: [],
-      users: [],
-      doctors: [],
-      appointments: [],
-      medicalRecords: [],
-      notifications: [],
-      doctorApplications: []
-    };
-  }
-}
-
-// Helper to write the database state
-export function writeDb(data: DbSchema): void {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
-  } catch (err) {
-    console.error("Error writing JSON database file:", err);
-  }
-}
-
-// Generic MongoDB-like Collection class backed by local JSON file storage
+// Generic MongoDB-like Collection class backed by real MongoDB (Mongoose)
 export class Collection<T extends { id: string }> {
-  private key: string;
+  private mongooseModel: mongoose.Model<any>;
 
-  constructor(key: string) {
-    this.key = key;
+  constructor(collectionName: string) {
+    // Map collectionName to appropriate MongoDB model schema.
+    // Using strict: false enables dynamic schemas (MongoDB's schema-less style) 
+    // while keeping id as a unique index for fast lookups.
+    const schema = new Schema(
+      { id: { type: String, unique: true } }, 
+      { strict: false, timestamps: true }
+    );
+    this.mongooseModel = mongoose.models[collectionName] || mongoose.model(collectionName, schema);
   }
 
-  find(query?: Partial<T>): T[] {
-    const db = readDb();
-    const items = (db as any)[this.key] || [];
-
-    if (!query || Object.keys(query).length === 0) {
-      return items;
-    }
-
-    return items.filter((item: any) => {
-      for (const [k, v] of Object.entries(query)) {
-        if (v === undefined) continue;
-        if (item[k] !== v) {
-          return false;
-        }
-      }
-      return true;
-    });
+  async find(query?: Partial<T>): Promise<T[]> {
+    const filter = query || {};
+    const docs = await this.mongooseModel.find(filter).lean();
+    return docs as unknown as T[];
   }
 
-  findOne(query: Partial<T>): T | null {
-    const items = this.find(query);
-    return items.length > 0 ? items[0] : null;
+  async findOne(query: Partial<T>): Promise<T | null> {
+    const doc = await this.mongooseModel.findOne(query).lean();
+    return doc as unknown as T | null;
   }
 
-  create(data: Omit<T, 'id'> & { id?: string }): T {
-    const db = readDb();
-    if (!(db as any)[this.key]) {
-      (db as any)[this.key] = [];
-    }
-
-    const id = data.id || `${this.key}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  async create(data: Omit<T, 'id'> & { id?: string }): Promise<T> {
+    const id = data.id || `${this.mongooseModel.modelName.toLowerCase()}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const newItem = {
       ...data,
       id,
-      createdAt: new Date().toISOString()
-    } as unknown as T;
-
-    (db as any)[this.key].push(newItem);
-    writeDb(db);
-    return newItem;
-  }
-
-  updateOne(query: Partial<T>, update: Partial<T>): T | null {
-    const db = readDb();
-    const items = (db as any)[this.key] || [];
-
-    // Find index of matching item
-    const index = items.findIndex((item: any) => {
-      for (const [k, v] of Object.entries(query)) {
-        if (v === undefined) continue;
-        if (item[k] !== v) return false;
-      }
-      return true;
-    });
-
-    if (index === -1) return null;
-
-    const existing = items[index];
-    const updatedItem = {
-      ...existing,
-      ...update,
-      updatedAt: new Date().toISOString()
     };
-
-    items[index] = updatedItem;
-    (db as any)[this.key] = items;
-    writeDb(db);
-    return updatedItem;
+    const created = await this.mongooseModel.create(newItem);
+    return created.toObject() as unknown as T;
   }
 
-  deleteOne(query: Partial<T>): boolean {
-    if (!query || Object.keys(query).length === 0) return false;
+  async updateOne(query: Partial<T>, update: Partial<T>): Promise<T | null> {
+    const updated = await this.mongooseModel.findOneAndUpdate(
+      query,
+      { $set: update },
+      { new: true, lean: true }
+    );
+    return updated as unknown as T | null;
+  }
 
-    const db = readDb();
-    const items = (db as any)[this.key] || [];
-
-    const originalLength = items.length;
-    const filteredItems = items.filter((item: any) => {
-      let matches = true;
-      for (const [k, v] of Object.entries(query)) {
-        if (v === undefined) continue;
-        if (item[k] !== v) {
-          matches = false;
-          break;
-        }
-      }
-      return !matches;
-    });
-
-    if (filteredItems.length === originalLength) {
-      return false;
-    }
-
-    (db as any)[this.key] = filteredItems;
-    writeDb(db);
-    return true;
+  async deleteOne(query: Partial<T>): Promise<boolean> {
+    const result = await this.mongooseModel.deleteOne(query);
+    return result.deletedCount ? result.deletedCount > 0 : false;
   }
 }
 
-// Instantiate JSON-backed Collections
+// Instantiate MongoDB-backed Collections
 export const RecommendationModel = new Collection<any>('recommendations');
 export const PredictionModel = new Collection<any>('predictions');
 export const ReminderModel = new Collection<any>('reminders');

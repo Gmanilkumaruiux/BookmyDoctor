@@ -9,7 +9,8 @@ import {
   PredictionModel,
   ReminderModel,
   ReminderLogModel,
-  DoctorModel
+  DoctorModel,
+  AppointmentModel
 } from "../db";
 
 // FEATURE 1: AI SMART SEARCH & FEATURE 2: DOCTOR RECOMMENDATIONS
@@ -27,7 +28,7 @@ export async function searchDoctors(req: Request, res: Response): Promise<void> 
     const filters = await interpretSearchQuery(query);
 
     // Fetch approved/active doctors from DoctorModel (SQLite database)
-    const doctorsToQuery = DoctorModel.find({ isApproved: true });
+    const doctorsToQuery = await DoctorModel.find({ isApproved: true });
 
     // Apply parsed filters
     let matchedDoctors = doctorsToQuery.filter((doc: any) => {
@@ -88,7 +89,7 @@ export async function searchDoctors(req: Request, res: Response): Promise<void> 
     results.sort((a, b) => b.matchScore - a.matchScore);
 
     // Save search recommendation event to History collection
-    const searchRecord = RecommendationModel.create({
+    const searchRecord = await RecommendationModel.create({
       patientId: patientId || "guest",
       query,
       interpretedFilters: filters,
@@ -110,7 +111,7 @@ export async function searchDoctors(req: Request, res: Response): Promise<void> 
 export async function getRecommendationHistory(req: Request, res: Response): Promise<void> {
   try {
     const { patientId } = req.query;
-    const history = RecommendationModel.find(patientId ? { patientId: patientId as string } : undefined);
+    const history = await RecommendationModel.find(patientId ? { patientId: patientId as string } : undefined);
     res.json(history);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -126,8 +127,8 @@ export async function recommendSlot(req: Request, res: Response): Promise<void> 
        return;
     }
 
-    // Load Doctor details from SQLite database
-    const doctor = DoctorModel.findOne({ id: doctorId });
+    // Load Doctor details from database
+    const doctor = await DoctorModel.findOne({ id: doctorId });
     if (!doctor) {
        res.status(404).json({ error: "Doctor not found." });
        return;
@@ -179,7 +180,7 @@ export async function predictWaitTime(req: Request, res: Response): Promise<void
     const { appointmentId, doctorId, time, queuePosition } = req.body;
     
     // Check if prediction already exists
-    let prediction = PredictionModel.findOne({ appointmentId });
+    let prediction = await PredictionModel.findOne({ appointmentId });
     
     // Simulate smart calculation
     // Base wait time is 15 mins per patient in the queue
@@ -223,9 +224,9 @@ export async function predictWaitTime(req: Request, res: Response): Promise<void
     };
 
     if (prediction) {
-      prediction = PredictionModel.updateOne({ appointmentId }, updateData);
+      prediction = await PredictionModel.updateOne({ appointmentId }, updateData);
     } else {
-      prediction = PredictionModel.create({
+      prediction = await PredictionModel.create({
         appointmentId,
         doctorId: doctorId || 'user_doc_1',
         queuePosition: pos,
@@ -256,8 +257,8 @@ export async function generateReminders(req: Request, res: Response): Promise<vo
     const medicines = await extractRemindersFromPrescription(prescriptionText);
 
     // Save extracted medicines to Reminders collections
-    const generatedReminders = medicines.map(med => {
-      return ReminderModel.create({
+    const generatedReminders = await Promise.all(medicines.map(async (med) => {
+      return await ReminderModel.create({
         appointmentId,
         patientId,
         patientName,
@@ -268,7 +269,7 @@ export async function generateReminders(req: Request, res: Response): Promise<vo
         timing: med.timing,
         enabled: true
       });
-    });
+    }));
 
     res.json({
       success: true,
@@ -287,7 +288,7 @@ export async function getReminders(req: Request, res: Response): Promise<void> {
        res.status(400).json({ error: "Patient ID is required." });
        return;
     }
-    const reminders = ReminderModel.find({ patientId: patientId as string });
+    const reminders = await ReminderModel.find({ patientId: patientId as string });
     res.json(reminders);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -298,7 +299,7 @@ export async function updateReminder(req: Request, res: Response): Promise<void>
   try {
     const { id } = req.params;
     const update = req.body;
-    const updated = ReminderModel.updateOne({ id }, update);
+    const updated = await ReminderModel.updateOne({ id }, update);
     if (!updated) {
        res.status(404).json({ error: "Reminder not found." });
        return;
@@ -314,7 +315,7 @@ export async function logReminderAction(req: Request, res: Response): Promise<vo
     const { reminderId, patientId, medicineName, dosage, scheduledTime, status } = req.body;
     
     // Create status log record
-    const log = ReminderLogModel.create({
+    const log = await ReminderLogModel.create({
       reminderId,
       patientId,
       medicineName,
@@ -327,7 +328,7 @@ export async function logReminderAction(req: Request, res: Response): Promise<vo
     // If status is 'snoozed', update reminder to be snoozed for 15 minutes
     if (status === 'snoozed') {
       const snoozedUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-      ReminderModel.updateOne({ id: reminderId }, { snoozedUntil });
+      await ReminderModel.updateOne({ id: reminderId }, { snoozedUntil });
     }
 
     res.json(log);
@@ -339,7 +340,7 @@ export async function logReminderAction(req: Request, res: Response): Promise<vo
 export async function getReminderLogs(req: Request, res: Response): Promise<void> {
   try {
     const { patientId } = req.query;
-    const logs = ReminderLogModel.find(patientId ? { patientId: patientId as string } : undefined);
+    const logs = await ReminderLogModel.find(patientId ? { patientId: patientId as string } : undefined);
     // Sort logs by action time descending
     logs.sort((a, b) => new Date(b.actionTime).getTime() - new Date(a.actionTime).getTime());
     res.json(logs);

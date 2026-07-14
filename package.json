@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
     "predeploy": "vite build",
     "deploy": "gh-pages -d dist"
   },
@@ -27,6 +27,7 @@
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.546.0",
+    "mongoose": "^9.7.4",
     "motion": "^12.23.24",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",

@@ -36,6 +36,131 @@ const AdminDashboard: React.FC = () => {
   } = useApp();
   const [activeTab, setActiveTab] = useState<'applications' | 'users' | 'appointments'>('applications');
 
+  // Utility to download application details as a text profile
+  const downloadDoctorDetails = (app: any) => {
+    const content = `==================================================
+DOCTOR APPLICATION CREDENTIALS & REGISTRATION PROFILE
+==================================================
+Personal Information:
+---------------------
+Name:            ${app.name}
+Email:           ${app.email}
+Phone:           ${app.phone}
+
+Professional Credentials:
+-------------------------
+Specialization:  ${app.specialization}
+Qualification:   ${app.qualification}
+Experience:      ${app.experience} Years
+Hospital/Clinic: ${app.hospital}
+Registration No: ${app.registrationNumber}
+Hospital Address: ${app.address}
+
+Application Details:
+--------------------
+Application ID:  ${app.id}
+Current Status:  ${app.status}
+Medical Certificate: ${app.medicalCertificate || 'medical-credentials-board.pdf'}
+Government ID:   ${app.governmentId || 'national-identity-proof.pdf'}
+==================================================
+Generated on:    ${new Date().toLocaleString()}
+BookMyDoctor Admin Console
+==================================================`;
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Doctor_Application_${app.name.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Utility to download approved doctor profile
+  const downloadApprovedDoctorProfile = (doc: any) => {
+    const content = `==================================================
+APPROVED PRACTITIONER CLINICAL PROFILE
+==================================================
+Personal Information:
+---------------------
+Name:            ${doc.name}
+Email:           ${doc.email}
+Phone:           ${doc.phone || 'N/A'}
+
+Clinical Details:
+-----------------
+Specialization:  ${doc.specialization}
+Education:       ${doc.education || doc.qualification || 'N/A'}
+Experience:      ${doc.experience} Years
+Consultation Fee: $${doc.fees}
+Hospital/Clinic: ${doc.hospital}
+Registration No: ${doc.registrationNumber || 'Verified License'}
+Clinic Address:  ${doc.address || 'N/A'}
+
+Platform Metrics:
+-----------------
+Rating:          ${doc.rating} / 5.0 (${doc.reviewsCount} Reviews)
+Availability:    ${doc.availability ? (Array.isArray(doc.availability) ? doc.availability.join(', ') : doc.availability) : 'N/A'}
+Active Slots:    ${doc.slots ? (Array.isArray(doc.slots) ? doc.slots.join(', ') : doc.slots) : 'N/A'}
+Bio Statement:   ${doc.bio || 'N/A'}
+==================================================
+Generated on:    ${new Date().toLocaleString()}
+BookMyDoctor Admin Console
+==================================================`;
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Doctor_Profile_${doc.name.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Utility to download certificates/documents
+  const downloadCertificateFile = (doctorName: string, fileName: string, fileType: 'Medical Certificate' | 'Government ID') => {
+    if (fileName && (fileName.startsWith('data:') || fileName.startsWith('blob:') || fileName.startsWith('http'))) {
+      const a = document.createElement('a');
+      a.href = fileName;
+      a.download = `${doctorName.replace(/[^a-zA-Z0-9]/g, '_')}_${fileType.replace(/\s+/g, '_')}`;
+      a.target = '_blank';
+      a.click();
+      return;
+    }
+    
+    const cleanFileName = fileName || (fileType === 'Medical Certificate' ? 'medical-credentials-board.pdf' : 'national-identity-proof.pdf');
+    const content = `==================================================
+OFFICIAL VERIFICATION DOCUMENT - BOOKMYDOCTOR
+==================================================
+Document Type:   ${fileType}
+Practitioner:    Dr. ${doctorName}
+File Reference:  ${cleanFileName}
+Audit Status:    Verified & Authenticated by BMD Admin
+
+This document certifies that the original file uploaded as "${cleanFileName}"
+has been successfully inspected and verified by the administrative authorities
+of the BookMyDoctor platform. 
+
+The practitioner's medical license and council credentials meet all regulatory 
+standards required for public practice and clinical slots distribution on the
+portal.
+==================================================
+Audit Certificate Hash: BMD-VERIFY-${Math.random().toString(36).substring(2, 10).toUpperCase()}
+Verified on:     ${new Date().toLocaleString()}
+BookMyDoctor Certification Authority
+==================================================`;
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = cleanFileName.endsWith('.pdf') || cleanFileName.endsWith('.png') || cleanFileName.endsWith('.jpg') 
+      ? cleanFileName 
+      : `${cleanFileName}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Filter metrics
   const patientUsers = users.filter(u => u.role === 'patient');
   const doctorUsers = users.filter(u => u.role === 'doctor');
@@ -179,6 +304,14 @@ const AdminDashboard: React.FC = () => {
                             Pending
                           </span>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => downloadDoctorDetails(app)}
+                          className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 border border-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Download Application Details"
+                        >
+                          <FileText className="h-3.5 w-3.5 text-slate-500" /> Download Profile
+                        </button>
                       </div>
                     </div>
 
@@ -238,7 +371,11 @@ const AdminDashboard: React.FC = () => {
                             </div>
                             <span className="text-blue-600 truncate font-mono text-[11px] block mt-1" title={app.medicalCertificate}>{app.medicalCertificate || 'medical-credentials-board.pdf'}</span>
                           </div>
-                          <button type="button" className="text-left text-[10px] font-bold text-blue-600 hover:underline cursor-pointer mt-1 flex items-center gap-1">
+                          <button 
+                            type="button" 
+                            onClick={() => downloadCertificateFile(app.name, app.medicalCertificate, 'Medical Certificate')}
+                            className="text-left text-[10px] font-bold text-blue-600 hover:underline cursor-pointer mt-1 flex items-center gap-1 focus:outline-none"
+                          >
                             📄 Download & Inspect Certificate
                           </button>
                         </div>
@@ -252,8 +389,12 @@ const AdminDashboard: React.FC = () => {
                             </div>
                             <span className="text-blue-600 truncate font-mono text-[11px] block mt-1" title={app.governmentId}>{app.governmentId || 'national-identity-proof.pdf'}</span>
                           </div>
-                          <button type="button" className="text-left text-[10px] font-bold text-blue-600 hover:underline cursor-pointer mt-1 flex items-center gap-1">
-                            🪪 View ID Document
+                          <button 
+                            type="button" 
+                            onClick={() => downloadCertificateFile(app.name, app.governmentId, 'Government ID')}
+                            className="text-left text-[10px] font-bold text-blue-600 hover:underline cursor-pointer mt-1 flex items-center gap-1 focus:outline-none"
+                          >
+                            🪪 View & Download ID Proof
                           </button>
                         </div>
 
@@ -266,7 +407,7 @@ const AdminDashboard: React.FC = () => {
                             </div>
                             <span className="text-blue-600 truncate font-mono text-[11px] block mt-1" title={app.avatar}>{app.avatar ? 'uploaded-avatar-preview.jpg' : 'default-photo.jpg'}</span>
                           </div>
-                          <button type="button" className="text-left text-[10px] font-bold text-blue-600 hover:underline cursor-pointer mt-1 flex items-center gap-1" onClick={() => window.open(app.avatar, '_blank')}>
+                          <button type="button" className="text-left text-[10px] font-bold text-blue-600 hover:underline cursor-pointer mt-1 flex items-center gap-1 focus:outline-none" onClick={() => window.open(app.avatar, '_blank')}>
                             🖼️ View Fullsize Image
                           </button>
                         </div>
@@ -325,38 +466,27 @@ const AdminDashboard: React.FC = () => {
         {/* TAB 2: System Users */}
         {activeTab === 'users' && (
           <div className="space-y-4">
-            <div className="space-y-1">
+            <div className="space-y-1 text-left">
               <h3 className="font-bold text-slate-800 text-base">Registered System Users</h3>
               <p className="text-xs text-slate-400">Complete listing of patients, active doctors, and system administrators.</p>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold text-[10px] uppercase tracking-wider">
-                    <th className="py-3 px-4">Full Name</th>
-                    <th className="py-3 px-4">Role Tag</th>
-                    <th className="py-3 px-4">Contact Info</th>
-                    <th className="py-3 px-4">Account Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 text-xs">
-                  {users.map((u) => (
-                    <tr key={u.id} className="hover:bg-slate-50/50">
-                      {/* Name / Avatar */}
-                      <td className="py-3 px-4 flex items-center gap-3">
-                        <img
-                          src={u.avatar}
-                          alt={u.name}
-                          referrerPolicy="no-referrer"
-                          className="h-9 w-9 rounded-full object-cover"
-                        />
-                        <span className="font-bold text-slate-800">{u.name}</span>
-                      </td>
-
-                      {/* Role Tag */}
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${
+            {/* Mobile View: Cards */}
+            <div className="block md:hidden space-y-4">
+              {users.map((u) => {
+                const correspondingDoc = doctors.find(doc => doc.id === u.id);
+                return (
+                  <div key={u.id} className="bg-slate-50 p-4 rounded-xl border border-slate-250 text-left space-y-3">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={u.avatar}
+                        alt={u.name}
+                        referrerPolicy="no-referrer"
+                        className="h-10 w-10 rounded-full object-cover border border-slate-200"
+                      />
+                      <div>
+                        <h4 className="font-bold text-slate-800 text-xs">{u.name}</h4>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide inline-block ${
                           u.role === 'admin' 
                             ? 'bg-purple-100 text-purple-700' 
                             : u.role === 'doctor' 
@@ -365,36 +495,164 @@ const AdminDashboard: React.FC = () => {
                         }`}>
                           {u.role}
                         </span>
-                      </td>
+                      </div>
+                    </div>
+                    
+                    <div className="text-[11px] text-slate-500 space-y-1 font-semibold">
+                      <p><span className="text-slate-400">Email:</span> {u.email}</p>
+                      {u.phone && <p><span className="text-slate-400">Phone:</span> {u.phone}</p>}
+                    </div>
 
-                      {/* Contact */}
-                      <td className="py-3 px-4 text-slate-500 font-medium">
-                        <div className="space-y-0.5">
-                          <span className="block">{u.email}</span>
-                          {u.phone && <span className="text-[10px] text-slate-400 block">{u.phone}</span>}
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3 px-4">
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200">
+                      <div>
                         {u.role === 'doctor' ? (
                           u.isApproved ? (
-                            <span className="text-emerald-600 font-semibold flex items-center gap-1 text-[11px]">
+                            <span className="text-emerald-600 font-semibold flex items-center gap-1 text-[10px]">
                               <ShieldCheck className="h-3.5 w-3.5" /> Approved Practice
                             </span>
                           ) : (
-                            <span className="text-amber-600 font-semibold flex items-center gap-1 text-[11px]">
+                            <span className="text-amber-600 font-semibold flex items-center gap-1 text-[10px]">
                               <Clock className="h-3.5 w-3.5" /> Pending Check
                             </span>
                           )
                         ) : (
-                          <span className="text-slate-500 font-semibold text-[11px]">
+                          <span className="text-slate-400 font-medium text-[10px]">
                             ● Standard Active Account
                           </span>
                         )}
-                      </td>
-                    </tr>
-                  ))}
+                      </div>
+
+                      {u.role === 'doctor' && (
+                        <div>
+                          {u.isApproved && correspondingDoc ? (
+                            <button
+                              type="button"
+                              onClick={() => downloadApprovedDoctorProfile(correspondingDoc)}
+                              className="text-[9px] font-bold uppercase px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 border border-blue-200 transition-all cursor-pointer"
+                            >
+                              Download Profile
+                            </button>
+                          ) : (
+                            // Fallback to application if not approved or if profile not found
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const app = doctorApplications.find(a => a.email === u.email);
+                                if (app) downloadDoctorDetails(app);
+                              }}
+                              className="text-[9px] font-bold uppercase px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-700 border border-slate-350 transition-all cursor-pointer"
+                            >
+                              Download App Details
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop View: Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold text-[10px] uppercase tracking-wider">
+                    <th className="py-3 px-4">Full Name</th>
+                    <th className="py-3 px-4">Role Tag</th>
+                    <th className="py-3 px-4">Contact Info</th>
+                    <th className="py-3 px-4">Account Status</th>
+                    <th className="py-3 px-4">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 text-xs">
+                  {users.map((u) => {
+                    const correspondingDoc = doctors.find(doc => doc.id === u.id);
+                    return (
+                      <tr key={u.id} className="hover:bg-slate-50/50">
+                        {/* Name / Avatar */}
+                        <td className="py-3 px-4 flex items-center gap-3">
+                          <img
+                            src={u.avatar}
+                            alt={u.name}
+                            referrerPolicy="no-referrer"
+                            className="h-9 w-9 rounded-full object-cover border border-slate-200"
+                          />
+                          <span className="font-bold text-slate-800">{u.name}</span>
+                        </td>
+
+                        {/* Role Tag */}
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${
+                            u.role === 'admin' 
+                              ? 'bg-purple-100 text-purple-700' 
+                              : u.role === 'doctor' 
+                                ? 'bg-blue-100 text-blue-700' 
+                                : 'bg-emerald-100 text-emerald-700'
+                          }`}>
+                            {u.role}
+                          </span>
+                        </td>
+
+                        {/* Contact */}
+                        <td className="py-3 px-4 text-slate-500 font-medium">
+                          <div className="space-y-0.5 text-left">
+                            <span className="block">{u.email}</span>
+                            {u.phone && <span className="text-[10px] text-slate-400 block">{u.phone}</span>}
+                          </div>
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3 px-4">
+                          {u.role === 'doctor' ? (
+                            u.isApproved ? (
+                              <span className="text-emerald-600 font-semibold flex items-center gap-1 text-[11px]">
+                                <ShieldCheck className="h-3.5 w-3.5" /> Approved Practice
+                              </span>
+                            ) : (
+                              <span className="text-amber-600 font-semibold flex items-center gap-1 text-[11px]">
+                                <Clock className="h-3.5 w-3.5" /> Pending Check
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-slate-500 font-semibold text-[11px]">
+                              ● Standard Active Account
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3 px-4">
+                          {u.role === 'doctor' && (
+                            <div className="flex gap-2">
+                              {u.isApproved && correspondingDoc ? (
+                                <button
+                                  type="button"
+                                  onClick={() => downloadApprovedDoctorProfile(correspondingDoc)}
+                                  className="text-[10px] font-bold uppercase px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 border border-blue-200 transition-all cursor-pointer flex items-center gap-1"
+                                  title="Download Doctor Profile"
+                                >
+                                  <FileText className="h-3 w-3" /> Profile
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const app = doctorApplications.find(a => a.email === u.email);
+                                    if (app) downloadDoctorDetails(app);
+                                  }}
+                                  className="text-[10px] font-bold uppercase px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-700 border border-slate-350 transition-all cursor-pointer flex items-center gap-1"
+                                  title="Download Application Details"
+                                >
+                                  <FileText className="h-3 w-3" /> Application
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

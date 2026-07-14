@@ -1,25 +1,88 @@
-<<<<<<< HEAD
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
-
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/40d0c131-c040-4d5f-a18e-924768c89c13
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
-=======
 # BookMyDoctor
-The Book a Doctor App is an innovative healthcare booking platform designed to streamline the process of connecting patients with healthcare providers. This system enables users to easily find, schedule, and manage medical appointments, all within a user-friendly interface.
->>>>>>> bd97264bb2f2a859db494f2b2bb56f2b2cfc1bc0
+
+BookMyDoctor is a full-stack doctor appointment booking platform that allows patients to search for doctors, book appointments, and manage their healthcare online.
+
+## Features
+
+- User Registration and Login
+- Google Authentication
+- Search Doctors
+- Book Appointments
+- Patient Dashboard
+- Doctor Dashboard
+- Appointment History
+- Notifications
+- AI Smart Search
+- Responsive Design
+
+## Tech Stack
+
+### Frontend
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+
+### Backend
+- Node.js
+- Express.js
+
+### Database
+- MongoDB Atlas
+
+### Authentication
+- JWT
+- Google OAuth
+
+## Installation
+
+1. Clone the repository
+
+```bash
+git clone https://github.com/Gmanilkumaruiux/Book_My_Dr.git
+```
+
+2. Go to the project folder
+
+```bash
+cd Book_My_Dr
+```
+
+3. Install dependencies
+
+```bash
+npm install
+```
+
+4. Create a `.env` file and add:
+
+```env
+MONGODB_URI=your_mongodb_connection_string
+JWT_SECRET=your_jwt_secret
+GEMINI_API_KEY=your_gemini_api_key
+APP_URL=http://localhost:3000
+```
+
+5. Start the application
+
+```bash
+npm run dev
+```
+
+## Project Structure
+
+```
+src/
+components/
+pages/
+layouts/
+context/
+utils/
+server.ts
+```
+
+## Author
+
+**G Manil Kumar**
+
+GitHub: https://github.com/Gmanilkumaruiux

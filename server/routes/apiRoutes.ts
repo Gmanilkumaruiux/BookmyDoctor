@@ -58,15 +58,15 @@ export function authenticateToken(req: AuthenticatedRequest, res: Response, next
 // ---------------- AUTH ROUTES ----------------
 
 // Login (With secure bcrypt password hashing verification)
-router.post('/auth/login', authRateLimiter, validateRequest(loginSchema), (req: Request, res: Response) => {
+router.post('/auth/login', authRateLimiter, validateRequest(loginSchema), async (req: Request, res: Response) => {
   const { email, password, requiredRole } = req.body;
 
   // Special handling for the fixed System Admin account
   if (email.toLowerCase() === 'admin@gmail.com') {
-    let user = UserModel.findOne({ email: 'admin@gmail.com' });
+    let user = await UserModel.findOne({ email: 'admin@gmail.com' });
     if (!user) {
       const salt = bcrypt.genSaltSync(10);
-      user = UserModel.create({
+      user = await UserModel.create({
         id: 'user_admin_fixed',
         name: 'System Administrator',
         email: 'admin@gmail.com',
@@ -95,7 +95,7 @@ router.post('/auth/login', authRateLimiter, validateRequest(loginSchema), (req: 
     return res.json({ success: true, token, user });
   }
 
-  const user = UserModel.findOne({ email });
+  const user = await UserModel.findOne({ email });
   if (!user) {
     return res.status(404).json({ error: 'User account not found.' });
   }
@@ -135,7 +135,7 @@ router.post('/auth/login', authRateLimiter, validateRequest(loginSchema), (req: 
 });
 
 // Register (With standard bcrypt encryption)
-router.post('/auth/register', validateRequest(registerSchema), (req: Request, res: Response) => {
+router.post('/auth/register', validateRequest(registerSchema), async (req: Request, res: Response) => {
   const userData = req.body;
 
   // Doctors and Administrators cannot self-register
@@ -146,7 +146,7 @@ router.post('/auth/register', validateRequest(registerSchema), (req: Request, re
     return res.status(403).json({ error: 'Administrator accounts cannot be self-registered.' });
   }
 
-  const existing = UserModel.findOne({ email: userData.email });
+  const existing = await UserModel.findOne({ email: userData.email });
   if (existing) {
     return res.status(400).json({ error: 'An account with this email already exists.' });
   }
@@ -157,7 +157,7 @@ router.post('/auth/register', validateRequest(registerSchema), (req: Request, re
 
   const avatar = userData.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(userData.name)}`;
   
-  const newUser = UserModel.create({
+  const newUser = await UserModel.create({
     ...userData,
     password: hashedPassword,
     avatar,
@@ -171,7 +171,7 @@ router.post('/auth/register', validateRequest(registerSchema), (req: Request, re
   );
 
   // Welcome notification
-  NotificationModel.create({
+  await NotificationModel.create({
     userId: newUser.id,
     message: `Welcome ${newUser.name}! Your account has been registered successfully.`,
     date: new Date().toISOString(),
@@ -183,25 +183,25 @@ router.post('/auth/register', validateRequest(registerSchema), (req: Request, re
 });
 
 // Google Login
-router.post('/auth/google', (req: Request, res: Response) => {
+router.post('/auth/google', async (req: Request, res: Response) => {
   const { email, name, avatar } = req.body;
   if (!email || !name) {
     return res.status(400).json({ error: 'Google email and name are required.' });
   }
 
-  let user = UserModel.findOne({ email });
+  let user = await UserModel.findOne({ email });
   let isNew = false;
 
   if (!user) {
     isNew = true;
-    user = UserModel.create({
+    user = await UserModel.create({
       name,
       email,
       role: 'patient',
       avatar: avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`
     });
 
-    NotificationModel.create({
+    await NotificationModel.create({
       userId: user.id,
       message: `Welcome ${name}! Your account has been registered successfully via Google.`,
       date: new Date().toISOString(),
@@ -223,40 +223,40 @@ router.post('/auth/google', (req: Request, res: Response) => {
 // ---------------- DOCTORS ROUTES ----------------
 
 // Get approved/active doctors
-router.get('/doctors', (req: Request, res: Response) => {
-  const doctors = DoctorModel.find({ isApproved: true });
+router.get('/doctors', async (req: Request, res: Response) => {
+  const doctors = await DoctorModel.find({ isApproved: true });
   return res.json(doctors);
 });
 
 // Get all doctors (Admin only, role check)
-router.get('/doctors/all', authenticateToken, authorizeRoles('admin'), (req: AuthenticatedRequest, res: Response) => {
-  const doctors = DoctorModel.find();
+router.get('/doctors/all', authenticateToken, authorizeRoles('admin'), async (req: AuthenticatedRequest, res: Response) => {
+  const doctors = await DoctorModel.find();
   return res.json(doctors);
 });
 
 // Get all users (Admin only, role check)
-router.get('/users', authenticateToken, authorizeRoles('admin'), (req: AuthenticatedRequest, res: Response) => {
-  const users = UserModel.find();
+router.get('/users', authenticateToken, authorizeRoles('admin'), async (req: AuthenticatedRequest, res: Response) => {
+  const users = await UserModel.find();
   return res.json(users);
 });
 
 // Verify doctor profile (Admin only)
-router.put('/doctors/:id/verify', authenticateToken, authorizeRoles('admin'), (req: AuthenticatedRequest, res: Response) => {
+router.put('/doctors/:id/verify', authenticateToken, authorizeRoles('admin'), async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const { status } = req.body; // 'approve' or 'reject'
   const isApproved = status === 'approve';
 
-  const updatedDoc = DoctorModel.updateOne({ id }, { isApproved });
+  const updatedDoc = await DoctorModel.updateOne({ id }, { isApproved });
   if (!updatedDoc) {
     res.status(404).json({ error: 'Doctor profile not found.' });
     return;
   }
 
   // Update corresponding user record
-  UserModel.updateOne({ id }, { isApproved });
+  await UserModel.updateOne({ id }, { isApproved });
 
   // Send notification to doctor
-  NotificationModel.create({
+  await NotificationModel.create({
     userId: id,
     message: isApproved 
       ? 'Congratulations! Your Doctor credentials have been verified. You can now accept patients.' 
@@ -273,24 +273,24 @@ router.put('/doctors/:id/verify', authenticateToken, authorizeRoles('admin'), (r
 // ---------------- APPOINTMENTS ROUTES ----------------
 
 // Get user appointments (Dynamic filters based on role)
-router.get('/appointments', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.get('/appointments', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { id, role } = req.user!;
   let appts = [];
 
   if (role === 'doctor') {
-    appts = AppointmentModel.find({ doctorId: id });
+    appts = await AppointmentModel.find({ doctorId: id });
   } else if (role === 'patient') {
-    appts = AppointmentModel.find({ patientId: id });
+    appts = await AppointmentModel.find({ patientId: id });
   } else {
     // Admin gets all
-    appts = AppointmentModel.find();
+    appts = await AppointmentModel.find();
   }
 
   return res.json(appts);
 });
 
 // Book an appointment (Patient only)
-router.post('/appointments', authenticateToken, authorizeRoles('patient'), (req: AuthenticatedRequest, res: Response) => {
+router.post('/appointments', authenticateToken, authorizeRoles('patient'), async (req: AuthenticatedRequest, res: Response) => {
   const { id: patientId, name: patientName, email: patientEmail } = req.user!;
   const { doctorId, date, time, symptoms, reportUrl, reportName } = req.body;
 
@@ -300,7 +300,7 @@ router.post('/appointments', authenticateToken, authorizeRoles('patient'), (req:
   }
 
   // Fetch doctor dynamically from database to make sure they are active
-  const doctor = DoctorModel.findOne({ id: doctorId });
+  const doctor = await DoctorModel.findOne({ id: doctorId });
   if (!doctor) {
     res.status(404).json({ error: 'Doctor profile not found.' });
     return;
@@ -312,7 +312,7 @@ router.post('/appointments', authenticateToken, authorizeRoles('patient'), (req:
   }
 
   // Validate double booking of the same slot
-  const existingBookings = AppointmentModel.find({ doctorId, date, time });
+  const existingBookings = await AppointmentModel.find({ doctorId, date, time });
   const activeBookings = existingBookings.filter(b => b.status !== 'cancelled');
 
   if (activeBookings.length > 0) {
@@ -321,7 +321,7 @@ router.post('/appointments', authenticateToken, authorizeRoles('patient'), (req:
   }
 
   // Create appointment
-  const newAppt = AppointmentModel.create({
+  const newAppt = await AppointmentModel.create({
     patientId,
     patientName,
     patientEmail,
@@ -338,7 +338,7 @@ router.post('/appointments', authenticateToken, authorizeRoles('patient'), (req:
   });
 
   // Notifications
-  NotificationModel.create({
+  await NotificationModel.create({
     userId: patientId,
     message: `Your appointment request for ${doctor.name} on ${date} at ${time} was submitted successfully.`,
     date: new Date().toISOString(),
@@ -346,7 +346,7 @@ router.post('/appointments', authenticateToken, authorizeRoles('patient'), (req:
     type: 'info'
   });
 
-  NotificationModel.create({
+  await NotificationModel.create({
     userId: doctorId,
     message: `New appointment requested by ${patientName} for ${date} at ${time}.`,
     date: new Date().toISOString(),
@@ -358,12 +358,12 @@ router.post('/appointments', authenticateToken, authorizeRoles('patient'), (req:
 });
 
 // Update appointment status
-router.put('/appointments/:id/status', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.put('/appointments/:id/status', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const { status } = req.body; // 'approved' | 'completed' | 'cancelled'
   const { id: userId, role } = req.user!;
 
-  const appt = AppointmentModel.findOne({ id });
+  const appt = await AppointmentModel.findOne({ id });
   if (!appt) {
     res.status(404).json({ error: 'Appointment not found.' });
     return;
@@ -389,7 +389,7 @@ router.put('/appointments/:id/status', authenticateToken, (req: AuthenticatedReq
   }
 
   // Save updated status
-  const updated = AppointmentModel.updateOne({ id }, { status });
+  const updated = await AppointmentModel.updateOne({ id }, { status });
 
   // Notifications
   let msg = '';
@@ -406,7 +406,7 @@ router.put('/appointments/:id/status', authenticateToken, (req: AuthenticatedReq
     type = 'alert';
   }
 
-  NotificationModel.create({
+  await NotificationModel.create({
     userId: appt.patientId,
     message: msg,
     date: new Date().toISOString(),
@@ -415,7 +415,7 @@ router.put('/appointments/:id/status', authenticateToken, (req: AuthenticatedReq
   });
 
   if (status === 'cancelled' && role === 'patient') {
-    NotificationModel.create({
+    await NotificationModel.create({
       userId: appt.doctorId,
       message: `Appointment for ${appt.patientName} on ${appt.date} at ${appt.time} was cancelled by patient.`,
       date: new Date().toISOString(),
@@ -428,7 +428,7 @@ router.put('/appointments/:id/status', authenticateToken, (req: AuthenticatedReq
 });
 
 // Rate an appointment (Patient rating a doctor)
-router.post('/appointments/:appointmentId/rate', authenticateToken, authorizeRoles('patient'), (req: AuthenticatedRequest, res: Response) => {
+router.post('/appointments/:appointmentId/rate', authenticateToken, authorizeRoles('patient'), async (req: AuthenticatedRequest, res: Response) => {
   const { appointmentId } = req.params;
   const { rating } = req.body;
   const { id: patientId } = req.user!;
@@ -438,7 +438,7 @@ router.post('/appointments/:appointmentId/rate', authenticateToken, authorizeRol
     return;
   }
 
-  const appt = AppointmentModel.findOne({ id: appointmentId });
+  const appt = await AppointmentModel.findOne({ id: appointmentId });
   if (!appt) {
     res.status(404).json({ error: 'Appointment not found.' });
     return;
@@ -460,17 +460,17 @@ router.post('/appointments/:appointmentId/rate', authenticateToken, authorizeRol
   }
 
   // Update appointment rating
-  const updatedAppt = AppointmentModel.updateOne({ id: appointmentId }, { rating });
+  const updatedAppt = await AppointmentModel.updateOne({ id: appointmentId }, { rating });
 
   // Update doctor average rating and reviews count
-  const doctor = DoctorModel.findOne({ id: appt.doctorId });
+  const doctor = await DoctorModel.findOne({ id: appt.doctorId });
   if (doctor) {
     const reviewsCount = doctor.reviewsCount || 0;
     const currentRating = doctor.rating || 5.0;
     const nextReviewsCount = reviewsCount + 1;
     const nextRating = parseFloat((((currentRating * reviewsCount) + rating) / nextReviewsCount).toFixed(2));
     
-    DoctorModel.updateOne({ id: appt.doctorId }, {
+    await DoctorModel.updateOne({ id: appt.doctorId }, {
       rating: nextRating,
       reviewsCount: nextReviewsCount
     });
@@ -483,19 +483,19 @@ router.post('/appointments/:appointmentId/rate', authenticateToken, authorizeRol
 // ---------------- MEDICAL RECORDS ROUTES ----------------
 
 // Get medical records for patient
-router.get('/medical-records', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.get('/medical-records', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { id, role } = req.user!;
   let records = [];
 
   if (role === 'patient') {
-    records = MedicalRecordModel.find({ patientId: id });
+    records = await MedicalRecordModel.find({ patientId: id });
   } else {
     // Doctors/Admins can query records passing patientId in query
     const { patientId } = req.query;
     if (patientId) {
-      records = MedicalRecordModel.find({ patientId: String(patientId) });
+      records = await MedicalRecordModel.find({ patientId: String(patientId) });
     } else {
-      records = MedicalRecordModel.find();
+      records = await MedicalRecordModel.find();
     }
   }
 
@@ -503,7 +503,7 @@ router.get('/medical-records', authenticateToken, (req: AuthenticatedRequest, re
 });
 
 // Upload medical record
-router.post('/medical-records', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.post('/medical-records', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { id: currentUserId, role } = req.user!;
   const recordData = req.body;
 
@@ -514,7 +514,7 @@ router.post('/medical-records', authenticateToken, (req: AuthenticatedRequest, r
     return;
   }
 
-  const newRecord = MedicalRecordModel.create({
+  const newRecord = await MedicalRecordModel.create({
     patientId,
     title: recordData.title,
     date: recordData.date || new Date().toISOString().split('T')[0],
@@ -524,7 +524,7 @@ router.post('/medical-records', authenticateToken, (req: AuthenticatedRequest, r
     description: recordData.description || ''
   });
 
-  NotificationModel.create({
+  await NotificationModel.create({
     userId: patientId,
     message: `Medical record "${recordData.title}" uploaded successfully.`,
     date: new Date().toISOString(),
@@ -536,11 +536,11 @@ router.post('/medical-records', authenticateToken, (req: AuthenticatedRequest, r
 });
 
 // Delete medical record
-router.delete('/medical-records/:id', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.delete('/medical-records/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const { id: userId, role } = req.user!;
 
-  const record = MedicalRecordModel.findOne({ id });
+  const record = await MedicalRecordModel.findOne({ id });
   if (!record) {
     res.status(404).json({ error: 'Medical record not found.' });
     return;
@@ -551,9 +551,9 @@ router.delete('/medical-records/:id', authenticateToken, (req: AuthenticatedRequ
     return;
   }
 
-  MedicalRecordModel.deleteOne({ id });
+  await MedicalRecordModel.deleteOne({ id });
 
-  NotificationModel.create({
+  await NotificationModel.create({
     userId: record.patientId,
     message: `Medical record "${record.title}" was deleted.`,
     date: new Date().toISOString(),
@@ -568,18 +568,18 @@ router.delete('/medical-records/:id', authenticateToken, (req: AuthenticatedRequ
 // ---------------- NOTIFICATIONS ROUTES ----------------
 
 // Get notifications
-router.get('/notifications', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.get('/notifications', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.user!;
-  const notifs = NotificationModel.find({ userId: id });
+  const notifs = await NotificationModel.find({ userId: id });
   return res.json(notifs);
 });
 
 // Mark single read
-router.put('/notifications/:id/read', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.put('/notifications/:id/read', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const { id: userId } = req.user!;
 
-  const updated = NotificationModel.updateOne({ id, userId }, { read: true });
+  const updated = await NotificationModel.updateOne({ id, userId }, { read: true });
   if (!updated) {
     res.status(404).json({ error: 'Notification not found.' });
     return;
@@ -589,23 +589,23 @@ router.put('/notifications/:id/read', authenticateToken, (req: AuthenticatedRequ
 });
 
 // Mark all read
-router.put('/notifications/read-all', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.put('/notifications/read-all', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { id: userId } = req.user!;
   
-  const userNotifs = NotificationModel.find({ userId });
-  userNotifs.forEach(n => {
-    NotificationModel.updateOne({ id: n.id }, { read: true });
-  });
+  const userNotifs = await NotificationModel.find({ userId });
+  await Promise.all(userNotifs.map(n => 
+    NotificationModel.updateOne({ id: n.id }, { read: true })
+  ));
 
   return res.json({ success: true });
 });
 
 // Delete notification
-router.delete('/notifications/:id', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.delete('/notifications/:id', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const { id: userId } = req.user!;
 
-  const deleted = NotificationModel.deleteOne({ id, userId });
+  const deleted = await NotificationModel.deleteOne({ id, userId });
   if (!deleted) {
     res.status(404).json({ error: 'Notification not found.' });
     return;
@@ -615,7 +615,7 @@ router.delete('/notifications/:id', authenticateToken, (req: AuthenticatedReques
 });
 
 // Update Profile Particulars (Fixing partial update erasure bug)
-router.put('/profile', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.put('/profile', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { id: userId, role } = req.user!;
   const profileData = req.body;
 
@@ -636,7 +636,7 @@ router.put('/profile', authenticateToken, (req: AuthenticatedRequest, res: Respo
   }
 
   // Update user with only supplied fields
-  const updatedUser = UserModel.updateOne({ id: userId }, userUpdates);
+  const updatedUser = await UserModel.updateOne({ id: userId }, userUpdates);
   if (!updatedUser) {
     res.status(404).json({ error: 'User profile not found.' });
     return;
@@ -644,7 +644,7 @@ router.put('/profile', authenticateToken, (req: AuthenticatedRequest, res: Respo
 
   // If Doctor role, also update Doctor collection entry safely without erasure
   if (role === 'doctor') {
-    const existingDoc = DoctorModel.findOne({ id: userId });
+    const existingDoc = await DoctorModel.findOne({ id: userId });
     
     const doctorUpdates: any = {};
     const doctorAllowedFields = [
@@ -663,10 +663,10 @@ router.put('/profile', authenticateToken, (req: AuthenticatedRequest, res: Respo
       }
     }
 
-    DoctorModel.updateOne({ id: userId }, doctorUpdates);
+    await DoctorModel.updateOne({ id: userId }, doctorUpdates);
   }
 
-  NotificationModel.create({
+  await NotificationModel.create({
     userId,
     message: 'Your profile information has been successfully updated.',
     date: new Date().toISOString(),
@@ -681,22 +681,22 @@ router.put('/profile', authenticateToken, (req: AuthenticatedRequest, res: Respo
 // ---------------- DOCTOR APPLICATIONS ROUTES ----------------
 
 // Submit Doctor Application (Public, with Zod schema verification)
-router.post('/doctor-applications', validateRequest(doctorApplicationSchema), (req: Request, res: Response) => {
+router.post('/doctor-applications', validateRequest(doctorApplicationSchema), async (req: Request, res: Response) => {
   const appData = req.body;
 
   // Check if already a doctor user
-  const existingUser = UserModel.findOne({ email: appData.email });
+  const existingUser = await UserModel.findOne({ email: appData.email });
   if (existingUser && existingUser.role === 'doctor') {
     return res.status(400).json({ error: 'An approved doctor account with this email already exists.' });
   }
 
   // Check if there's already a pending application for this email
-  const existingApp = DoctorApplicationModel.findOne({ email: appData.email, status: 'Pending' });
+  const existingApp = await DoctorApplicationModel.findOne({ email: appData.email, status: 'Pending' });
   if (existingApp) {
     return res.status(400).json({ error: 'You already have a pending application with this email.' });
   }
 
-  const newApp = DoctorApplicationModel.create({
+  const newApp = await DoctorApplicationModel.create({
     ...appData,
     experience: Number(appData.experience),
     status: 'Pending'
@@ -706,13 +706,13 @@ router.post('/doctor-applications', validateRequest(doctorApplicationSchema), (r
 });
 
 // Get all applications (Admin only)
-router.get('/doctor-applications', authenticateToken, authorizeRoles('admin'), (req: AuthenticatedRequest, res: Response) => {
-  const applications = DoctorApplicationModel.find();
+router.get('/doctor-applications', authenticateToken, authorizeRoles('admin'), async (req: AuthenticatedRequest, res: Response) => {
+  const applications = await DoctorApplicationModel.find();
   return res.json(applications);
 });
 
 // Verify/Approve/Reject Doctor Application (Admin only)
-router.put('/doctor-applications/:id/verify', authenticateToken, authorizeRoles('admin'), (req: AuthenticatedRequest, res: Response) => {
+router.put('/doctor-applications/:id/verify', authenticateToken, authorizeRoles('admin'), async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const { status } = req.body; // 'Approved' or 'Rejected'
 
@@ -720,7 +720,7 @@ router.put('/doctor-applications/:id/verify', authenticateToken, authorizeRoles(
     return res.status(400).json({ error: 'Invalid status. Must be "Approved" or "Rejected".' });
   }
 
-  const app = DoctorApplicationModel.findOne({ id });
+  const app = await DoctorApplicationModel.findOne({ id });
   if (!app) {
     return res.status(404).json({ error: 'Doctor application not found.' });
   }
@@ -736,7 +736,7 @@ router.put('/doctor-applications/:id/verify', authenticateToken, authorizeRoles(
     const generatedPassword = bcrypt.hashSync(rawPassword, salt);
 
     // Create User account (register them so they can log in)
-    const newUser = UserModel.create({
+    const newUser = await UserModel.create({
       name: app.name,
       email: app.email,
       password: generatedPassword,
@@ -747,7 +747,7 @@ router.put('/doctor-applications/:id/verify', authenticateToken, authorizeRoles(
     });
 
     // Create Doctor Profile
-    DoctorModel.create({
+    await DoctorModel.create({
       id: newUser.id,
       name: app.name,
       email: app.email,
@@ -769,7 +769,7 @@ router.put('/doctor-applications/:id/verify', authenticateToken, authorizeRoles(
     });
 
     // Welcome Notification for Doctor
-    NotificationModel.create({
+    await NotificationModel.create({
       userId: newUser.id,
       message: `Welcome Dr. ${app.name}! Your medical credentials registration has been APPROVED by BMD Admin.`,
       date: new Date().toISOString(),
@@ -778,7 +778,7 @@ router.put('/doctor-applications/:id/verify', authenticateToken, authorizeRoles(
     });
 
     // Save generated credentials directly on the application for the Admin view (store rawPassword so admin can provide it)
-    const updatedApp = DoctorApplicationModel.updateOne({ id }, { 
+    const updatedApp = await DoctorApplicationModel.updateOne({ id }, { 
       status: 'Approved',
       generatedEmail: app.email,
       generatedPassword: rawPassword
@@ -786,7 +786,7 @@ router.put('/doctor-applications/:id/verify', authenticateToken, authorizeRoles(
 
     return res.json({ success: true, application: updatedApp });
   } else {
-    const updatedApp = DoctorApplicationModel.updateOne({ id }, { status: 'Rejected' });
+    const updatedApp = await DoctorApplicationModel.updateOne({ id }, { status: 'Rejected' });
     return res.json({ success: true, application: updatedApp });
   }
 });
